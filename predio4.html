@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Limpeza</title>
+    <style>
+        :root { --primary: #007bff; --success: #28a745; --warning: #ffc107; --danger: #dc3545; --dark: #343a40; }
+        body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; margin: 0; padding: 20px; }
+        .container { max-width: 600px; margin: auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        h2 { text-align: center; color: var(--dark); }
+        
+        .secao { display: none; }
+        .ativa { display: block; }
+        input, select, button { width: 100%; padding: 12px; margin: 8px 0; border-radius: 6px; border: 1px solid #ddd; box-sizing: border-box; }
+        button { cursor: pointer; border: none; font-weight: bold; transition: 0.3s; }
+        .btn-main { background: var(--primary); color: white; }
+        .btn-sair { background: #6c757d; color: white; margin-top: 10px; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-export { background: #17a2b8; color: white; }
+
+        .aba-container { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 10px; margin-bottom: 15px; }
+        .aba { padding: 10px 20px; background: #e9ecef; border-radius: 20px; cursor: pointer; white-space: nowrap; font-size: 14px; }
+        .aba.ativa { background: var(--primary); color: white; }
+        
+        .card { background: #fff; border-left: 5px solid var(--primary); padding: 15px; margin-bottom: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; }
+        .card.concluido { border-left-color: var(--success); opacity: 0.8; }
+        
+        .admin-form { background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #eee; }
+        .botoes-admin { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div id="tela-login" class="secao ativa">
+        <h2>🔑 Acesso ao Sistema</h2>
+        <select id="select-user">
+            <option value="admin">Administrador</option>
+            <option value="Ana">Ana</option>
+            <option value="Bruno">Bruno</option>
+            <option value="Carlos">Carlos</option>
+        </select>
+        <input type="password" id="senha" placeholder="Senha (padrão: 123)">
+        <button class="btn-main" onclick="fazerLogin()">Entrar</button>
+    </div>
+
+    <div id="painel-admin" class="secao">
+        <h2>⚙️ Painel Admin</h2>
+        <div class="admin-form">
+            <h4>Atribuir Nova Tarefa</h4>
+            <select id="adm-andar">
+                <option value="" disabled selected>Selecione o Andar</option>
+                <option value="Térreo">Térreo</option>
+                <option value="1º Andar">1º Andar</option>
+                <option value="2º Andar">2º Andar</option>
+                <option value="3º Andar">3º Andar</option>
+                <option value="4º Andar">4º Andar</option>
+                <option value="Copa/Refeitório">Copa/Refeitório</option>
+            </select>
+            <input type="text" id="adm-tarefa" placeholder="Ex: Limpeza de Vidros">
+            <select id="adm-dia">
+                <option>Segunda</option><option>Terça</option><option>Quarta</option>
+                <option>Quinta</option><option>Sexta</option><option>Sábado</option><option>Domingo</option>
+            </select>
+            <select id="adm-func">
+                <option value="Ana">Ana</option><option value="Bruno">Bruno</option><option value="Carlos">Carlos</option>
+            </select>
+            <button class="btn-main" onclick="adicionarTarefa()" style="background: var(--success);">Adicionar na Escala</button>
+        </div>
+
+        <div class="botoes-admin">
+            <button class="btn-export" onclick="exportarCSV()">📊 Exportar CSV</button>
+            <button class="btn-danger" onclick="limparSemana()">🔄 Limpar Semana</button>
+        </div>
+
+        <div id="lista-geral"></div>
+        <button class="btn-sair" onclick="logout()">Sair</button>
+    </div>
+
+    <div id="painel-func" class="secao">
+        <h2 id="boas-vindas"></h2>
+        <div class="aba-container" id="abas-dias"></div>
+        <div id="minhas-tarefas"></div>
+        <button class="btn-sair" onclick="logout()">Sair</button>
+    </div>
+</div>
+
+<script>
+    let tarefas = JSON.parse(localStorage.getItem('db_limpeza')) || [];
+    let usuarioLogado = "";
+    let diaSelecionado = "Segunda";
+    const dias = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"];
+
+    function fazerLogin() {
+        const user = document.getElementById('select-user').value;
+        const pass = document.getElementById('senha').value;
+        if (pass === "123") {
+            usuarioLogado = user;
+            document.getElementById('tela-login').classList.remove('ativa');
+            if (user === 'admin') {
+                document.getElementById('painel-admin').classList.add('ativa');
+                renderizarAdmin();
+            } else {
+                document.getElementById('painel-func').classList.add('ativa');
+                document.getElementById('boas-vindas').innerText = `Olá, ${user} 👋 Essas são suas tarefas`;
+                renderizarFunc();
+            }
+        } else { alert("Senha incorreta!"); }
+    }
+
+    function adicionarTarefa() {
+        const andar = document.getElementById('adm-andar').value;
+        const tarefa = document.getElementById('adm-tarefa').value;
+        const dia = document.getElementById('adm-dia').value;
+        const func = document.getElementById('adm-func').value;
+        if (!andar || !tarefa) return alert("Preencha o andar e a tarefa!");
+        tarefas.push({ id: Date.now(), dia, andar, tarefa, usuario: func, status: "Pendente", inicio: null, fim: null, duracao: null });
+        salvar();
+        renderizarAdmin();
+        // Limpa o campo de tarefa após adicionar
+        document.getElementById('adm-tarefa').value = "";
+    }
+
+    function limparSemana() {
+        if (confirm("Deseja resetar todas as tarefas para 'Pendente' e limpar os tempos?")) {
+            tarefas = tarefas.map(t => ({ ...t, status: "Pendente", inicio: null, fim: null, duracao: null }));
+            salvar();
+            renderizarAdmin();
+        }
+    }
+
+    function exportarCSV() {
+        if (tarefas.length === 0) return alert("Não há dados para exportar.");
+        // Usando ponto e vírgula para abrir corretamente no Excel direto
+        let csv = "Dia;Usuario;Andar;Tarefa;Status;Inicio;Fim;Duracao_Min\n";
+        tarefas.forEach(t => {
+            csv += `${t.dia};${t.usuario};${t.andar};${t.tarefa};${t.status};${t.inicio || ''};${t.fim || ''};${t.duracao || ''}\n`;
+        });
+        // Adicionando BOM para garantir acentos no Excel
+        const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.setAttribute("download", "relatorio_limpeza.csv");
+        link.click();
+    }
+
+    function salvar() { localStorage.setItem('db_limpeza', JSON.stringify(tarefas)); }
+    
+    function renderizarAdmin() {
+        const lista = document.getElementById('lista-geral');
+        lista.innerHTML = "<h4>Escala Atual</h4>";
+        tarefas.forEach(t => {
+            lista.innerHTML += `
+                <div class="card ${t.status === 'Concluído' ? 'concluido' : ''}">
+                    <small>${t.dia} - ${t.usuario}</small>
+                    <div><strong>${t.andar}</strong>: ${t.tarefa}</div>
+                    <button onclick="removerTarefa(${t.id})" style="width:auto; background:none; color:red; font-size:20px">🗑️</button>
+                </div>`;
+        });
+    }
+
+    function removerTarefa(id) {
+        if(confirm("Deseja excluir esta tarefa?")) {
+            tarefas = tarefas.filter(t => t.id !== id);
+            salvar();
+            renderizarAdmin();
+        }
+    }
+
+    function renderizarFunc() {
+        const abas = document.getElementById('abas-dias');
+        abas.innerHTML = dias.map(d => `<div class="aba ${d === diaSelecionado ? 'ativa' : ''}" onclick="setDia('${d}')">${d}</div>`).join('');
+        const lista = document.getElementById('minhas-tarefas');
+        const filtradas = tarefas.filter(t => t.usuario === usuarioLogado && t.dia === diaSelecionado);
+        lista.innerHTML = filtradas.length ? "" : "<p>Nenhuma tarefa agendada.</p>";
+        filtradas.forEach(t => {
+            let acao = t.status === "Concluído" ? `<span style="color:green">✅ ${t.duracao} min</span>` :
+                       !t.inicio ? `<button onclick="acaoTarefa(${t.id}, 'start')" style="background:var(--warning); width:auto">⏱️ Iniciar</button>` :
+                       `<button onclick="acaoTarefa(${t.id}, 'stop')" style="background:var(--success); color:white; width:auto">✅ Finalizar</button>`;
+            lista.innerHTML += `<div class="card ${t.status === 'Concluído' ? 'concluido' : ''}">
+                <div><strong>${t.andar}</strong><br><small>${t.tarefa}</small></div>
+                <div>${acao}</div>
+            </div>`;
+        });
+    }
+
+    function acaoTarefa(id, tipo) {
+        const t = tarefas.find(x => x.id === id);
+        const agora = new Date();
+        if (tipo === 'start') {
+            t.inicio = agora.toLocaleTimeString();
+            t.inicioRaw = agora.getTime();
+        } else {
+            t.fim = agora.toLocaleTimeString();
+            t.duracao = Math.floor((agora.getTime() - t.inicioRaw) / 60000);
+            t.status = "Concluído";
+        }
+        salvar();
+        renderizarFunc();
+    }
+
+    function setDia(d) { diaSelecionado = d; renderizarFunc(); }
+    function logout() { location.reload(); }
+</script>
+</body>
+</html>
